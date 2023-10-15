@@ -1,13 +1,11 @@
-import sys
-
-from fastapi import APIRouter
+from fastapi import APIRouter, Depends
 from typing import List
-import os
+from sqlalchemy import insert, select
+from sqlalchemy.ext.asyncio import AsyncSession
 
-import sys
-print("SYS PATH: ", sys.path[0])
-
-from person.schemas import Person
+from person.schemas import Person, Race
+from person.models import races_table, person_table
+from database import get_async_session
 
 primarhs_db = [
     {"id": 1, "name": "Лев Эль’Джонсон", "race": 0, "role": "Примарх", "world": "Калибан", "alive": True},
@@ -35,20 +33,44 @@ router = APIRouter(
     tags=['Person']
 )
 
+@router.get("/race/{race_id}/", response_model=List[Race])
+async def get_one_race(race_id: int, session: AsyncSession = Depends(get_async_session)):
+    """This method get data about one race from DB"""
+    query = select(races_table).where(races_table.c.id == race_id)
+    result = await session.execute(query)
+    return result.all()
 
-@router.get("/{person_id}")
-async def get_person(person_id: int):
+
+@router.post("/race/")
+async def add_race(race_data: Race, session: AsyncSession = Depends(get_async_session)):
+    """
+    This method add new race in DB
+    :arg: race_data - data in request body about one race
+    """
+    stmt = insert(races_table).values(**race_data.dict())
+    await session.execute(stmt)
+    await session.commit()
+    return {"status": "success"}
+
+
+@router.get("/{person_id}/", response_model=List[Person])
+async def get_person(person_id: int, session: AsyncSession = Depends(get_async_session)):
     """This method get data about one person from DB"""
-    return [person for person in primarhs_db if person.get("id") == person_id]
+    query = select(person_table).where(person_table.c.id == person_id)
+    result = await session.execute(query)
+    return result.all()
 
 
 @router.post("/")
-def add_person(person_data: List[Person]):
+async def add_person(person_data: Person, session: AsyncSession = Depends(get_async_session)):
     """
     This method add new person in DB
     :arg: person_data - data in request body about one person
     """
-    primarhs_db.extend(person_data)
-    return primarhs_db
+    stmt = insert(person_table).values(**person_data.dict())
+    await session.execute(stmt)
+    await session.commit()
+    return {"status": "success"}
+
 
 

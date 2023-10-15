@@ -1,8 +1,11 @@
-from fastapi import APIRouter
+from fastapi import APIRouter, Depends
 from typing import List
+from sqlalchemy import insert, select
+from sqlalchemy.ext.asyncio import AsyncSession
 
 from legion.schemas import Legion
-
+from legion.models import legion_table
+from database import get_async_session
 
 
 router = APIRouter(
@@ -11,22 +14,21 @@ router = APIRouter(
 )
 
 
-legion_db = [
-    {"id": 1, "name": "Темные ангелы", "primarh_id": 1, "loyalty": True}
-]
-
-
-@router.get("/{legion_id}")
-async def get_legion(legion_id: int):
+@router.get("/{legion_id}", response_model=List[Legion])
+async def get_legion(legion_id: int, session: AsyncSession = Depends(get_async_session)):
     """This method get data about one legion from DB"""
-    return [legion for legion in legion_db if legion.get("id") == legion_id]
+    query = select(legion_table).where(legion_table.c.id == legion_id)
+    result = await session.execute(query)
+    return result.all()
 
 
 @router.post("/")
-async def add_legion(legion_data: List[Legion]):
+async def add_legion(legion_data: Legion, session: AsyncSession = Depends(get_async_session)):
     """
     This method add new legion in DB
     :arg: legion_data - data in request body about one legion
     """
-    legion_db.extend(legion_data)
-    return legion_db
+    stmt = insert(legion_table).values(**legion_data.dict())
+    await session.execute(stmt)
+    await session.commit()
+    return {"status": "success"}
